@@ -1,0 +1,178 @@
+// This is your Prisma schema file
+// Database schema for Gas Agency Call Center
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// User Model - System users (agents, admins, supervisors)
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  password      String
+  name          String
+  role          String     @default("agent") // agent, supervisor, admin
+  status        String     @default("inactive") // inactive, active, suspended
+  profile       Profile?
+  agent         Agent?
+  calls         Call[]
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+// User Profile
+model Profile {
+  id            String     @id @default(cuid())
+  userId        String     @unique
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  avatar        String?
+  phone         String?
+  department    String?
+  bio           String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+// Agent Model - Call center agents
+model Agent {
+  id              String     @id @default(cuid())
+  userId          String     @unique
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status          String     @default("offline") // offline, available, busy, break
+  callsHandled    Int        @default(0)
+  totalDuration   Int        @default(0) // in seconds
+  avgDuration     Float      @default(0)
+  rating          Float      @default(0) // 0-5 stars
+  skills          String[]   // Array of skill tags
+  maxConcurrentCalls Int     @default(1)
+  calls           Call[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+// Customer Model - External callers
+model Customer {
+  id              String     @id @default(cuid())
+  phone           String     @unique
+  name            String
+  email           String?
+  company         String?
+  serviceType     String?    // Type of service requested
+  address         String?
+  city            String?
+  state           String?
+  zipCode         String?
+  notes           String?
+  totalCalls      Int        @default(0)
+  lastCallDate    DateTime?
+  calls           Call[]
+  tickets         Ticket[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+// Call Model - Individual phone calls
+model Call {
+  id                String     @id @default(cuid())
+  customerId        String
+  customer          Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  agentId           String?
+  agent             Agent?     @relation(fields: [agentId], references: [id])
+  status            String     @default("initiated") // initiated, ringing, connected, completed, failed
+  callType          String?    // inbound, outbound
+  direction         String?    // incoming, outgoing
+  duration          Int        @default(0) // in seconds
+  startTime         DateTime   @default(now())
+  endTime           DateTime?
+  recordingUrl      String?
+  recordingDuration Int?
+  quality           String?    // good, fair, poor
+  notes             String?
+  tags              String[]
+  callHistory       CallHistory?
+  ticket            Ticket?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+// Call History - Detailed call information
+model CallHistory {
+  id              String     @id @default(cuid())
+  callId          String     @unique
+  call            Call       @relation(fields: [callId], references: [id], onDelete: Cascade)
+  transcript      String?
+  mood            String?    // happy, neutral, angry
+  resolution      Boolean    @default(false)
+  followUpNeeded  Boolean    @default(false)
+  notes           String?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+}
+
+// Ticket Model - Support tickets from calls
+model Ticket {
+  id              String     @id @default(cuid())
+  callId          String?    @unique
+  call            Call?      @relation(fields: [callId], references: [id])
+  customerId      String
+  customer        Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  agentId         String?
+  agent           Agent?     @relation(fields: [agentId], references: [id])
+  subject         String
+  description     String?
+  priority        String     @default("normal") // low, normal, high, critical
+  status          String     @default("open") // open, in_progress, resolved, closed
+  category        String?
+  tags            String[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  closedAt        DateTime?
+}
+
+// Analytics Model - Daily call center metrics
+model Analytics {
+  id                    String     @id @default(cuid())
+  date                  DateTime   @unique
+  totalCalls            Int        @default(0)
+  inboundCalls          Int        @default(0)
+  outboundCalls         Int        @default(0)
+  completedCalls        Int        @default(0)
+  failedCalls           Int        @default(0)
+  avgDuration           Float      @default(0)
+  minDuration           Int        @default(0)
+  maxDuration           Int        @default(0)
+  agentsOnline          Int        @default(0)
+  peakHour              Int?
+  customerSatisfaction  Float      @default(0) // 0-5
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+}
+
+// Settings Model - System-wide settings
+model Settings {
+  id                String     @id @default(cuid())
+  key               String     @unique
+  value             String
+  type              String     @default("string") // string, number, boolean, json
+  description       String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+}
+
+// Activity Log Model - System audit trail
+model ActivityLog {
+  id              String     @id @default(cuid())
+  userId          String?
+  action          String
+  resource        String?
+  resourceId      String?
+  details         String?
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime   @default(now())
+}
